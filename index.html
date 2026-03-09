@@ -1,0 +1,864 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Group LAN Messenger</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
+  <style>
+    :root { color-scheme: dark; }
+    body {
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, sans-serif;
+      background:
+        radial-gradient(circle at 12% 18%, rgba(99,102,241,0.18), transparent 26%),
+        radial-gradient(circle at 82% 82%, rgba(168,85,247,0.16), transparent 26%),
+        radial-gradient(circle at 50% 0%, rgba(59,130,246,0.14), transparent 32%),
+        linear-gradient(135deg, #020617 0%, #0f172a 45%, #111827 100%);
+      min-height: 100vh;
+    }
+    .glass {
+      background: rgba(15,23,42,0.68);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(148,163,184,0.14);
+      box-shadow: 0 18px 50px rgba(0,0,0,0.28);
+    }
+    .glass-soft {
+      background: rgba(30,41,59,0.48);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border: 1px solid rgba(148,163,184,0.1);
+    }
+    .status-dot {
+      width: 0.72rem; height: 0.72rem;
+      border-radius: 9999px; display: inline-block;
+      box-shadow: 0 0 12px currentColor;
+    }
+    .scrollbar-thin::-webkit-scrollbar { width: 10px; }
+    .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+    .scrollbar-thin::-webkit-scrollbar-thumb {
+      background: rgba(100,116,139,0.45); border-radius: 9999px;
+      border: 2px solid transparent; background-clip: content-box;
+    }
+    .scrollbar-thin::-webkit-scrollbar-thumb:hover {
+      background: rgba(148,163,184,0.65);
+      border: 2px solid transparent; background-clip: content-box;
+    }
+  </style>
+</head>
+<body class="text-slate-100 selection:bg-violet-500/30">
+
+  <!-- ===================== USERNAME GATE ===================== -->
+  <div id="usernameScreen" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+    <div class="glass relative w-full max-w-md rounded-3xl p-6 sm:p-8">
+      <p class="text-xs font-semibold uppercase tracking-[0.28em] text-violet-300/80">Group LAN Messenger</p>
+      <h1 class="mt-3 text-3xl font-semibold text-white">Choose a username</h1>
+      <p class="mt-2 text-sm leading-relaxed text-slate-400">
+        Pick a display name. You'll create or join a room on the next screen.
+      </p>
+      <label for="usernameInput" class="mt-5 mb-2 block text-sm font-medium text-slate-300">Username</label>
+      <input id="usernameInput" type="text" maxlength="24" placeholder="e.g. Alex"
+        class="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400/40 focus:ring-2 focus:ring-violet-500/30" />
+      <p id="usernameError" class="mt-2 hidden text-sm text-red-300"></p>
+      <button id="startBtn"
+        class="mt-5 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 px-4 py-3 font-medium text-white shadow-lg shadow-violet-900/30 transition hover:brightness-110 active:scale-[0.99]">
+        Continue →
+      </button>
+    </div>
+  </div>
+
+  <!-- ===================== ROOM GATE ===================== -->
+  <div id="roomScreen" class="fixed inset-0 z-40 hidden items-center justify-center p-4">
+    <div class="absolute inset-0 bg-slate-950/70 backdrop-blur-sm"></div>
+    <div class="glass relative w-full max-w-md rounded-3xl p-6 sm:p-8">
+      <p class="text-xs font-semibold uppercase tracking-[0.28em] text-violet-300/80">Group LAN Messenger</p>
+      <h1 class="mt-3 text-2xl font-semibold text-white">Create or Join a Room</h1>
+      <p class="mt-2 text-sm leading-relaxed text-slate-400">
+        <strong class="text-slate-200">Create</strong> a room and share the code, or
+        <strong class="text-slate-200">Join</strong> with a code someone gave you.
+      </p>
+
+      <div id="roomScreenNotice" class="mt-4 hidden rounded-2xl border px-4 py-3 text-sm"></div>
+
+      <div class="mt-6 grid grid-cols-2 gap-3">
+        <button id="createRoomBtn"
+          class="rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 px-4 py-5 font-medium text-white shadow-lg shadow-violet-900/30 transition hover:brightness-110 active:scale-[0.99]">
+          <div class="text-2xl mb-1">🏠</div>
+          Create Room
+        </button>
+        <button id="showJoinBtn"
+          class="rounded-2xl bg-slate-800/80 px-4 py-5 font-medium text-slate-100 transition hover:bg-slate-700/80 active:scale-[0.99]">
+          <div class="text-2xl mb-1">🚪</div>
+          Join Room
+        </button>
+      </div>
+
+      <div id="joinFields" class="mt-5 hidden">
+        <label for="roomCodeInput" class="mb-2 block text-sm font-medium text-slate-300">Room Code</label>
+        <input id="roomCodeInput" type="text" maxlength="64" placeholder="Paste the room code here"
+          class="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400/40 focus:ring-2 focus:ring-violet-500/30" />
+        <p id="roomError" class="mt-2 hidden text-sm text-red-300"></p>
+        <button id="joinRoomBtn"
+          class="mt-3 inline-flex w-full items-center justify-center rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-500 px-4 py-3 font-medium text-white transition hover:brightness-110 active:scale-[0.99]">
+          Join Room
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ===================== MAIN APP ===================== -->
+  <main id="app" class="hidden min-h-screen p-3 sm:p-5 lg:p-6">
+    <div class="mx-auto flex max-w-7xl flex-col gap-4 lg:h-[calc(100vh-3rem)] lg:flex-row">
+
+      <!-- Sidebar -->
+      <aside class="glass w-full rounded-3xl p-5 sm:p-6 lg:w-72 lg:flex-shrink-0">
+        <div class="flex h-full flex-col gap-4">
+
+          <div>
+            <p class="text-xs font-semibold uppercase tracking-[0.28em] text-slate-400">Group Messenger</p>
+            <h2 class="mt-2 text-xl font-semibold text-white">Room Info</h2>
+          </div>
+
+          <!-- Identity -->
+          <div class="glass-soft rounded-2xl p-4 space-y-2">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm text-slate-400">Logged in as</span>
+              <span id="selfUsername" class="rounded-full bg-violet-500/15 px-3 py-1 text-xs font-medium text-violet-200">@user</span>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm text-slate-400">Role</span>
+              <span id="roleLabel" class="rounded-full bg-slate-700/60 px-3 py-1 text-xs font-medium text-slate-300">—</span>
+            </div>
+          </div>
+
+          <!-- Room Code -->
+          <div class="glass-soft rounded-2xl p-4">
+            <label class="mb-2 block text-sm font-medium text-slate-300">Room Code</label>
+            <input id="roomCodeDisplay" type="text" readonly value="—"
+              class="w-full rounded-2xl border border-white/10 bg-slate-950/70 px-4 py-3 text-sm text-slate-200 outline-none" />
+            <button id="copyRoomCodeBtn"
+              class="mt-3 w-full rounded-2xl bg-violet-500/15 px-4 py-2.5 text-sm font-medium text-violet-200 transition hover:bg-violet-500/25 active:scale-[0.99]">
+              Copy Room Code
+            </button>
+          </div>
+
+          <!-- Status -->
+          <div class="glass-soft rounded-2xl p-4">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-sm font-medium text-slate-300">Status</span>
+              <div class="flex items-center gap-2">
+                <span id="statusDot" class="status-dot bg-amber-400 text-amber-400"></span>
+                <span id="statusText" class="text-sm text-slate-300">Connecting...</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Members -->
+          <div class="glass-soft rounded-2xl p-4 flex-1 min-h-0 overflow-hidden flex flex-col">
+            <p class="mb-3 text-sm font-medium text-slate-300 flex-shrink-0">
+              Members
+              <span id="memberCount" class="ml-1 rounded-full bg-slate-700/60 px-2 py-0.5 text-xs text-slate-400">1</span>
+            </p>
+            <ul id="memberList" class="space-y-2 text-sm overflow-y-auto scrollbar-thin"></ul>
+          </div>
+
+          <!-- Notice -->
+          <div id="notice" class="hidden rounded-2xl border px-4 py-3 text-sm" aria-live="polite"></div>
+
+          <!-- Leave -->
+          <button id="leaveRoomBtn"
+            class="rounded-2xl bg-red-500/15 px-4 py-3 text-sm font-medium text-red-200 transition hover:bg-red-500/25 active:scale-[0.99]">
+            Leave Room
+          </button>
+
+          <div class="rounded-2xl border border-white/10 bg-slate-950/35 p-4 text-xs leading-relaxed text-slate-400">
+            <p class="font-semibold text-slate-300">How it works</p>
+            <p class="mt-1">The room creator is the hub. Everyone connects to them. Messages relay to the whole room instantly.</p>
+          </div>
+        </div>
+      </aside>
+
+      <!-- Chat Panel -->
+      <section class="glass flex min-h-[68vh] flex-1 flex-col overflow-hidden rounded-3xl">
+        <div class="border-b border-white/10 bg-slate-950/25 px-4 py-4 sm:px-5 sm:py-5">
+          <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <h3 class="text-xl font-semibold text-white">Group Chat</h3>
+              <p id="chatSubtitle" class="text-sm text-slate-400">Waiting for others to join...</p>
+            </div>
+            <div class="inline-flex items-center gap-2 self-start rounded-full bg-slate-900/60 px-3 py-1.5 text-xs text-slate-300">
+              <span class="h-2 w-2 rounded-full bg-violet-400"></span>
+              WebRTC P2P
+            </div>
+          </div>
+        </div>
+
+        <div id="chatMessages" class="scrollbar-thin flex-1 overflow-y-auto p-4 sm:p-5" aria-live="polite">
+          <div id="emptyState" class="flex h-full min-h-[280px] items-center justify-center">
+            <div class="glass-soft max-w-md rounded-3xl p-6 text-center">
+              <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/15 text-2xl">💬</div>
+              <h4 class="text-lg font-semibold text-white">Room is ready</h4>
+              <p class="mt-2 text-sm leading-relaxed text-slate-400">Share the room code from the sidebar. Once others join, messages appear here.</p>
+            </div>
+          </div>
+        </div>
+
+        <div class="border-t border-white/10 bg-slate-950/30 p-3 sm:p-4">
+          <div class="flex items-end gap-3">
+            <input id="messageInput" type="text" maxlength="1000"
+              placeholder="Type a message and press Enter..."
+              class="w-full rounded-2xl border border-white/10 bg-slate-900/70 px-4 py-3 text-slate-100 placeholder:text-slate-500 outline-none transition focus:border-violet-400/40 focus:ring-2 focus:ring-violet-500/30" />
+            <button id="sendBtn"
+              class="rounded-2xl bg-gradient-to-r from-violet-500 to-indigo-500 px-5 py-3 font-medium text-white shadow-lg shadow-violet-900/30 transition hover:brightness-110 active:scale-[0.99]">
+              Send
+            </button>
+          </div>
+          <p class="mt-2 text-xs text-slate-500">Press Enter to send.</p>
+        </div>
+      </section>
+    </div>
+  </main>
+
+<script>
+/* =============================================================
+   Group LAN Messenger — Star topology, no backend required.
+   - Host: creates a Peer with a fixed ID derived from room code.
+     Accepts all incoming connections, relays every message to
+     every other connected peer.
+   - Guest: connects to the host's Peer ID (= room code).
+     Sends/receives everything through the host.
+============================================================= */
+
+// ── DOM refs ──────────────────────────────────────────────────
+const $  = id => document.getElementById(id);
+const refs = {
+  usernameScreen : $("usernameScreen"),
+  usernameInput  : $("usernameInput"),
+  usernameError  : $("usernameError"),
+  startBtn       : $("startBtn"),
+
+  roomScreen     : $("roomScreen"),
+  roomScreenNotice: $("roomScreenNotice"),
+  createRoomBtn  : $("createRoomBtn"),
+  showJoinBtn    : $("showJoinBtn"),
+  joinFields     : $("joinFields"),
+  roomCodeInput  : $("roomCodeInput"),
+  roomError      : $("roomError"),
+  joinRoomBtn    : $("joinRoomBtn"),
+
+  app            : $("app"),
+  selfUsername   : $("selfUsername"),
+  roleLabel      : $("roleLabel"),
+  roomCodeDisplay: $("roomCodeDisplay"),
+  copyRoomCodeBtn: $("copyRoomCodeBtn"),
+  statusDot      : $("statusDot"),
+  statusText     : $("statusText"),
+  notice         : $("notice"),
+  memberList     : $("memberList"),
+  memberCount    : $("memberCount"),
+  leaveRoomBtn   : $("leaveRoomBtn"),
+  chatSubtitle   : $("chatSubtitle"),
+  chatMessages   : $("chatMessages"),
+  emptyState     : $("emptyState"),
+  messageInput   : $("messageInput"),
+  sendBtn        : $("sendBtn"),
+};
+
+// ── State ─────────────────────────────────────────────────────
+const state = {
+  username  : "",
+  isHost    : false,
+  roomCode  : "",
+  peer      : null,
+  // Host keeps a map of peerId → { conn, username }
+  guests    : new Map(),
+  // Guest keeps a single connection to host
+  hostConn  : null,
+};
+
+// ── Colour palette for member names ──────────────────────────
+const NAME_COLORS = [
+  "text-violet-300", "text-emerald-300", "text-sky-300",
+  "text-amber-300",  "text-pink-300",    "text-teal-300",
+  "text-orange-300", "text-cyan-300",
+];
+const memberColors = new Map(); // username → color class
+let colorIndex = 0;
+function colorFor(username) {
+  if (!memberColors.has(username)) {
+    memberColors.set(username, NAME_COLORS[colorIndex % NAME_COLORS.length]);
+    colorIndex++;
+  }
+  return memberColors.get(username);
+}
+
+// ── Notice / status helpers ───────────────────────────────────
+const NOTICE = {
+  error   : "border-red-400/25 bg-red-500/10 text-red-200",
+  success : "border-emerald-400/25 bg-emerald-500/10 text-emerald-200",
+  info    : "border-sky-400/25 bg-sky-500/10 text-sky-200",
+  warn    : "border-amber-400/25 bg-amber-500/10 text-amber-200",
+};
+const ALL_NOTICE_CLASSES = [...new Set(Object.values(NOTICE).join(" ").split(" "))];
+
+function setNotice(el, msg = "", tone = "info") {
+  el.classList.remove(...ALL_NOTICE_CLASSES);
+  if (!msg) { el.textContent = ""; el.classList.add("hidden"); return; }
+  el.textContent = msg;
+  el.classList.remove("hidden");
+  el.classList.add(...(NOTICE[tone] || NOTICE.info).split(" "));
+}
+
+function setStatus(connected, label) {
+  refs.statusText.textContent = label;
+  refs.statusDot.classList.remove(
+    "bg-emerald-400","text-emerald-400",
+    "bg-red-400","text-red-400",
+    "bg-amber-400","text-amber-400"
+  );
+  if (connected === true) {
+    refs.statusDot.classList.add("bg-emerald-400","text-emerald-400");
+  } else if (connected === "pending") {
+    refs.statusDot.classList.add("bg-amber-400","text-amber-400");
+  } else {
+    refs.statusDot.classList.add("bg-red-400","text-red-400");
+  }
+}
+
+function sanitize(v, max = 1000) { return String(v ?? "").slice(0, max); }
+
+function friendlyError(err) {
+  switch (err?.type) {
+    case "peer-unavailable"  : return "Room not found — check the code and try again.";
+    case "invalid-id"        : return "Invalid room code format.";
+    case "unavailable-id"    : return "That room code is already taken. Try generating a new one.";
+    case "network"           : return "Network error. Check your connection.";
+    case "socket-error"      : return "Could not reach the signaling server.";
+    case "server-error"      : return "Signaling server error.";
+    case "browser-incompatible": return "This browser doesn't support WebRTC.";
+    default                  : return err?.message || "Unknown error.";
+  }
+}
+
+// ── Chat rendering ────────────────────────────────────────────
+function hideEmpty() {
+  refs.emptyState && refs.emptyState.classList.add("hidden");
+}
+
+function scrollBottom() {
+  requestAnimationFrame(() => {
+    refs.chatMessages.scrollTop = refs.chatMessages.scrollHeight;
+  });
+}
+
+function addSystemMsg(text, tone = "info") {
+  hideEmpty();
+  const toneMap = {
+    info   : "border-sky-400/20 bg-sky-500/10 text-sky-100",
+    success: "border-emerald-400/20 bg-emerald-500/10 text-emerald-100",
+    warn   : "border-amber-400/20 bg-amber-500/10 text-amber-100",
+    error  : "border-red-400/20 bg-red-500/10 text-red-100",
+  };
+  const wrap = document.createElement("div");
+  wrap.className = "flex justify-center py-1";
+  const pill = document.createElement("div");
+  pill.className = `max-w-full rounded-full border px-4 py-2 text-center text-xs ${toneMap[tone] || toneMap.info}`;
+  pill.textContent = text;
+  wrap.appendChild(pill);
+  refs.chatMessages.appendChild(wrap);
+  scrollBottom();
+}
+
+function addChatMsg({ text, username, self = false, timestamp = Date.now() }) {
+  hideEmpty();
+  const color = colorFor(username);
+  const time  = new Date(timestamp).toLocaleTimeString([], { hour:"2-digit", minute:"2-digit" });
+
+  const wrap = document.createElement("div");
+  wrap.className = `flex ${self ? "justify-end" : "justify-start"} mb-3`;
+
+  const bubble = document.createElement("div");
+  bubble.className = [
+    "max-w-[85%] rounded-2xl px-4 py-3 shadow-lg",
+    self
+      ? "rounded-br-md bg-gradient-to-br from-violet-500 to-indigo-500 text-white shadow-violet-900/20"
+      : "rounded-bl-md border border-white/5 bg-slate-700/70 text-slate-100",
+  ].join(" ");
+
+  const meta = document.createElement("div");
+  meta.className = `mb-1 flex items-center gap-2 text-[11px] ${self ? "text-white/80" : "text-slate-400"}`;
+
+  const nameEl = document.createElement("span");
+  nameEl.className = `font-semibold ${self ? "" : color}`;
+  nameEl.textContent = self ? "You" : sanitize(username, 24) || "Peer";
+
+  const dot = document.createElement("span"); dot.textContent = "•";
+  const timeEl = document.createElement("span"); timeEl.textContent = time;
+
+  meta.append(nameEl, dot, timeEl);
+
+  const p = document.createElement("p");
+  p.className = "whitespace-pre-wrap break-words text-sm leading-relaxed";
+  p.textContent = sanitize(text, 1000);
+
+  bubble.append(meta, p);
+  wrap.appendChild(bubble);
+  refs.chatMessages.appendChild(wrap);
+  scrollBottom();
+}
+
+// ── Member list ───────────────────────────────────────────────
+function rebuildMemberList() {
+  refs.memberList.innerHTML = "";
+
+  // Always show self first
+  const names = [{ name: state.username, self: true }];
+
+  if (state.isHost) {
+    state.guests.forEach(g => names.push({ name: g.username || g.conn.peer, self: false }));
+  } else if (state.hostConn) {
+    // We only know about ourselves; host will broadcast member list
+    state._remoteMembers && state._remoteMembers.forEach(n => {
+      if (n !== state.username) names.push({ name: n, self: false });
+    });
+  }
+
+  names.forEach(({ name, self: isSelf }) => {
+    const li = document.createElement("li");
+    li.className = "flex items-center gap-2";
+
+    const dot = document.createElement("span");
+    dot.className = "inline-block w-2 h-2 rounded-full bg-emerald-400 flex-shrink-0";
+    dot.style.boxShadow = "0 0 6px #34d399";
+
+    const nameEl = document.createElement("span");
+    nameEl.className = colorFor(name);
+    nameEl.textContent = name + (isSelf ? " (you)" : "");
+
+    li.append(dot, nameEl);
+    refs.memberList.appendChild(li);
+  });
+
+  refs.memberCount.textContent = names.length;
+  refs.chatSubtitle.textContent =
+    names.length === 1
+      ? "Waiting for others to join..."
+      : `${names.length} people in the room`;
+}
+
+// ── Host broadcasts member list to all guests ─────────────────
+function hostBroadcastMemberList() {
+  if (!state.isHost) return;
+  const names = [state.username];
+  state.guests.forEach(g => { if (g.username) names.push(g.username); });
+  broadcastAsHost({ type: "member-list", names });
+  rebuildMemberList();
+}
+
+// ── Host: relay a packet to everyone except the sender ────────
+function relayToOthers(packet, senderPeerId = null) {
+  state.guests.forEach((g, pid) => {
+    if (pid === senderPeerId) return;
+    try { if (g.conn.open) g.conn.send(packet); } catch(_) {}
+  });
+}
+
+// ── Host: send to everyone including self-rendering ───────────
+function broadcastAsHost(packet) {
+  state.guests.forEach(g => {
+    try { if (g.conn.open) g.conn.send(packet); } catch(_) {}
+  });
+}
+
+// ── Generate a short room code ────────────────────────────────
+function generateRoomCode() {
+  // 8 uppercase alphanumeric chars — readable, typeable
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let code = "";
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
+
+// ── PeerJS config (cloud signaling, P2P data) ─────────────────
+const PEER_CONFIG = {
+  secure: true,
+  debug: 1,
+  config: {
+    iceServers: [
+      { urls: "stun:stun.l.google.com:19302" },
+      { urls: "stun:global.stun.twilio.com:3478" },
+    ],
+  },
+};
+
+// =============================================================
+//  HOST FLOW
+// =============================================================
+function startHost(roomCode) {
+  state.isHost   = true;
+  state.roomCode = roomCode;
+
+  setStatus("pending", "Opening room...");
+  addSystemMsg("Creating room, please wait...", "info");
+
+  // The host's Peer ID IS the room code. Guests connect to this ID.
+  const peer = new Peer(roomCode, PEER_CONFIG);
+  state.peer = peer;
+
+  peer.on("open", id => {
+    state.roomCode = id;
+    refs.roomCodeDisplay.value = id;
+    refs.roleLabel.textContent  = "Host";
+    setStatus(true, "Room open");
+    setNotice(refs.notice, "");
+    addSystemMsg(`Room open! Share the code: ${id}`, "success");
+    rebuildMemberList();
+  });
+
+  // A new guest connects
+  peer.on("connection", conn => {
+    const pid = conn.peer;
+
+    // Store immediately so we can track state
+    state.guests.set(pid, { conn, username: "" });
+
+    conn.on("open", () => {
+      addSystemMsg(`A peer connected (${pid}).`, "info");
+      setStatus(true, `${state.guests.size + 1} in room`);
+    });
+
+    conn.on("data", data => {
+      if (!data || typeof data !== "object") return;
+
+      if (data.type === "hello") {
+        const uname = sanitize(data.username, 24).trim() || pid;
+        const guest = state.guests.get(pid);
+        if (guest) guest.username = uname;
+
+        addSystemMsg(`${uname} joined the room.`, "success");
+        hostBroadcastMemberList();
+        return;
+      }
+
+      if (data.type === "message") {
+        const text  = sanitize(data.text, 1000).trim();
+        const uname = sanitize(data.username, 24).trim() || "Guest";
+        if (!text) return;
+
+        const packet = {
+          type      : "message",
+          text,
+          username  : uname,
+          timestamp : data.timestamp || Date.now(),
+        };
+
+        // Show in host UI
+        addChatMsg({ text, username: uname, self: false });
+
+        // Relay to all other guests
+        relayToOthers(packet, pid);
+        return;
+      }
+    });
+
+    conn.on("close", () => {
+      const guest = state.guests.get(pid);
+      const uname = guest?.username || pid;
+      state.guests.delete(pid);
+      addSystemMsg(`${uname} left the room.`, "warn");
+      setStatus(true, `${state.guests.size + 1} in room`);
+      hostBroadcastMemberList();
+    });
+
+    conn.on("error", err => {
+      const guest = state.guests.get(pid);
+      const uname = guest?.username || pid;
+      state.guests.delete(pid);
+      addSystemMsg(`Connection error with ${uname}.`, "error");
+      hostBroadcastMemberList();
+    });
+  });
+
+  peer.on("error", err => {
+    const msg = friendlyError(err);
+    setStatus(false, "Error");
+    setNotice(refs.notice, msg, "error");
+    addSystemMsg(msg, "error");
+  });
+}
+
+// =============================================================
+//  GUEST FLOW
+// =============================================================
+function startGuest(roomCode) {
+  state.isHost   = false;
+  state.roomCode = roomCode;
+  state._remoteMembers = [];
+
+  setStatus("pending", "Connecting...");
+
+  // Guest gets a random Peer ID
+  const peer = new Peer(undefined, PEER_CONFIG);
+  state.peer = peer;
+
+  peer.on("open", () => {
+    const conn = peer.connect(roomCode, { reliable: true, serialization: "json" });
+    state.hostConn = conn;
+
+    conn.on("open", () => {
+      setStatus(true, "Connected");
+      refs.roomCodeDisplay.value = roomCode;
+      refs.roleLabel.textContent  = "Guest";
+      setNotice(refs.notice, "");
+      addSystemMsg(`Connected to room ${roomCode}.`, "success");
+      rebuildMemberList();
+
+      // Introduce ourselves
+      conn.send({ type: "hello", username: state.username, timestamp: Date.now() });
+
+      refs.messageInput.focus();
+    });
+
+    conn.on("data", data => {
+      if (!data || typeof data !== "object") return;
+
+      if (data.type === "message") {
+        const text  = sanitize(data.text, 1000).trim();
+        const uname = sanitize(data.username, 24).trim() || "Peer";
+        if (!text) return;
+        addChatMsg({ text, username: uname, self: false });
+        return;
+      }
+
+      if (data.type === "member-list") {
+        state._remoteMembers = Array.isArray(data.names) ? data.names : [];
+        rebuildMemberList();
+        return;
+      }
+    });
+
+    conn.on("close", () => {
+      setStatus(false, "Disconnected");
+      addSystemMsg("Disconnected from the room.", "warn");
+      disableComposer();
+    });
+
+    conn.on("error", err => {
+      setStatus(false, "Error");
+      const msg = friendlyError(err);
+      setNotice(refs.notice, msg, "error");
+      addSystemMsg(msg, "error");
+      disableComposer();
+    });
+  });
+
+  peer.on("error", err => {
+    const msg = friendlyError(err);
+    setStatus(false, "Error");
+    setNotice(refs.roomScreenNotice, msg, "error");
+    // Show room screen again so they can retry
+    refs.app.classList.add("hidden");
+    refs.roomScreen.style.display = "flex";
+  });
+}
+
+// ── Composer ──────────────────────────────────────────────────
+function disableComposer() {
+  refs.messageInput.disabled = true;
+  refs.sendBtn.disabled = true;
+}
+
+function enableComposer() {
+  refs.messageInput.disabled = false;
+  refs.sendBtn.disabled = false;
+}
+
+// ── Send a message ────────────────────────────────────────────
+function sendMessage() {
+  const text = sanitize(refs.messageInput.value, 1000).trim();
+  if (!text) return;
+
+  const packet = {
+    type      : "message",
+    text,
+    username  : state.username,
+    timestamp : Date.now(),
+  };
+
+  if (state.isHost) {
+    // Host renders locally and relays to all guests
+    addChatMsg({ text, username: state.username, self: true });
+    broadcastAsHost(packet);
+  } else {
+    // Guest sends to host; host will relay back to others
+    // We render optimistically
+    if (!state.hostConn || !state.hostConn.open) {
+      setNotice(refs.notice, "Not connected to the room.", "error");
+      return;
+    }
+    addChatMsg({ text, username: state.username, self: true });
+    try { state.hostConn.send(packet); } catch(_) {
+      setNotice(refs.notice, "Failed to send message.", "error");
+    }
+  }
+
+  refs.messageInput.value = "";
+  refs.messageInput.focus();
+}
+
+// ── Enter app ─────────────────────────────────────────────────
+function enterApp() {
+  refs.usernameScreen.classList.add("hidden");
+  refs.app.classList.remove("hidden");
+  refs.selfUsername.textContent = `@${state.username}`;
+  colorFor(state.username); // assign a colour slot
+  enableComposer();
+}
+
+// ── Leave / cleanup ───────────────────────────────────────────
+function leaveRoom() {
+  try { state.hostConn?.close(); } catch(_) {}
+  try { state.guests.forEach(g => g.conn.close()); } catch(_) {}
+  try { state.peer?.destroy(); } catch(_) {}
+
+  state.peer    = null;
+  state.hostConn = null;
+  state.guests.clear();
+  state.isHost  = false;
+  state.roomCode = "";
+  state._remoteMembers = [];
+  memberColors.clear();
+  colorIndex = 0;
+
+  // Reset UI
+  refs.app.classList.add("hidden");
+  refs.chatMessages.innerHTML = "";
+  refs.memberList.innerHTML   = "";
+  refs.roomCodeDisplay.value  = "—";
+  refs.roleLabel.textContent  = "—";
+  setStatus(false, "Disconnected");
+  setNotice(refs.notice, "");
+
+  // Re-insert empty state
+  const es = document.createElement("div");
+  es.id = "emptyState";
+  es.className = "flex h-full min-h-[280px] items-center justify-center";
+  es.innerHTML = `
+    <div class="glass-soft max-w-md rounded-3xl p-6 text-center">
+      <div class="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-2xl bg-violet-500/15 text-2xl">💬</div>
+      <h4 class="text-lg font-semibold text-white">Room is ready</h4>
+      <p class="mt-2 text-sm leading-relaxed text-slate-400">Share the room code from the sidebar. Once others join, messages appear here.</p>
+    </div>`;
+  refs.chatMessages.appendChild(es);
+
+  // Back to room screen
+  refs.roomCodeInput.value = "";
+  setNotice(refs.roomScreenNotice, "");
+  refs.joinFields.classList.add("hidden");
+  refs.roomScreen.style.display = "flex";
+}
+
+// =============================================================
+//  EVENT LISTENERS
+// =============================================================
+
+// Username gate
+refs.startBtn.addEventListener("click", () => {
+  const name = sanitize(refs.usernameInput.value, 24).trim();
+  if (!name) {
+    refs.usernameError.textContent = "Please enter a username.";
+    refs.usernameError.classList.remove("hidden");
+    refs.usernameInput.focus();
+    return;
+  }
+  refs.usernameError.classList.add("hidden");
+  state.username = name;
+  localStorage.setItem("lanMessengerUsername", name);
+  refs.usernameScreen.classList.add("hidden");
+  refs.roomScreen.style.display = "flex";
+});
+
+refs.usernameInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); refs.startBtn.click(); }
+});
+
+// Restore saved username
+refs.usernameInput.value = localStorage.getItem("lanMessengerUsername") || "";
+
+// Room screen
+refs.createRoomBtn.addEventListener("click", () => {
+  const code = generateRoomCode();
+  setNotice(refs.roomScreenNotice, "");
+  refs.roomScreen.style.display = "none";
+  enterApp();
+  startHost(code);
+});
+
+refs.showJoinBtn.addEventListener("click", () => {
+  refs.joinFields.classList.toggle("hidden");
+  if (!refs.joinFields.classList.contains("hidden")) refs.roomCodeInput.focus();
+});
+
+refs.joinRoomBtn.addEventListener("click", () => {
+  const code = refs.roomCodeInput.value.trim().toUpperCase();
+  refs.roomError.classList.add("hidden");
+
+  if (!code) {
+    refs.roomError.textContent = "Please enter a room code.";
+    refs.roomError.classList.remove("hidden");
+    refs.roomCodeInput.focus();
+    return;
+  }
+
+  setNotice(refs.roomScreenNotice, "Connecting...", "info");
+  refs.roomScreen.style.display = "none";
+  enterApp();
+  startGuest(code);
+});
+
+refs.roomCodeInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); refs.joinRoomBtn.click(); }
+});
+
+// Copy room code
+refs.copyRoomCodeBtn.addEventListener("click", async () => {
+  const code = state.roomCode;
+  if (!code || code === "—") return;
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(code);
+    } else {
+      refs.roomCodeDisplay.removeAttribute("readonly");
+      refs.roomCodeDisplay.select();
+      document.execCommand("copy");
+      refs.roomCodeDisplay.setAttribute("readonly", true);
+    }
+    const orig = refs.copyRoomCodeBtn.textContent;
+    refs.copyRoomCodeBtn.textContent = "Copied!";
+    setTimeout(() => { refs.copyRoomCodeBtn.textContent = orig; }, 1500);
+    setNotice(refs.notice, "Room code copied to clipboard.", "success");
+  } catch(_) {
+    setNotice(refs.notice, "Copy failed — select and copy manually.", "warn");
+  }
+});
+
+// Send message
+refs.sendBtn.addEventListener("click", sendMessage);
+refs.messageInput.addEventListener("keydown", e => {
+  if (e.key === "Enter") { e.preventDefault(); sendMessage(); }
+});
+
+// Leave
+refs.leaveRoomBtn.addEventListener("click", leaveRoom);
+
+// Cleanup on unload
+window.addEventListener("beforeunload", () => {
+  try { state.hostConn?.close(); } catch(_) {}
+  try { state.guests?.forEach(g => g.conn.close()); } catch(_) {}
+  try { state.peer?.destroy(); } catch(_) {}
+});
+</script>
+</body>
+</html>
